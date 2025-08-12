@@ -1,0 +1,20 @@
+[package]
+name = "rust"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+godot-bevy = { git = "https://github.com/bytemeadow/godot-bevy" }
+bevy = { version = "0.16", default-features = false }
+godot = "0.3"
+bevy_quinnet = "0.17.0"
+serde = { version = "1.0.145", features = ["derive"] }
+tokio = { version = "1.36.0", features = ["sync", "rt-multi-thread", "macros"] }
+rand = "0.8.5"
+
+[[bin]]
+name = "server"
+path = "src/server.rs"

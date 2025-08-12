@@ -1,0 +1,14 @@
+[gd_scene format=3 uid="uid://bpaggg2g8bsga"]
+
+[node name="Main" type="Node2D"]
+
+[node name="RichTextLabel" type="ChatNode" parent="."]
+offset_right = 320.0
+offset_bottom = 176.0
+scroll_following = true
+vertical_alignment = 2
+
+[node name="TextEdit" type="ChatInputNode" parent="."]
+offset_top = 176.0
+offset_right = 320.0
+offset_bottom = 216.0
