@@ -6,9 +6,19 @@ use serde::{Deserialize, Serialize};
 // Messages from clients
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {
-    Join { name: String },
+    Join {
+        name: String,
+    },
     Disconnect {},
-    ChatMessage { message: String },
+    ChatMessage {
+        message: String,
+    },
+    PlayerUpdate {
+        x: f32,
+        y: f32,
+        horizontal: f32,
+        vertical: f32,
+    },
 }
 
 // Messages from the server
@@ -28,5 +38,12 @@ pub enum ServerMessage {
     InitClient {
         client_id: ClientId,
         usernames: HashMap<ClientId, String>,
+    },
+    PlayerUpdate {
+        client_id: ClientId,
+        x: f32,
+        y: f32,
+        horizontal: f32,
+        vertical: f32,
     },
 }

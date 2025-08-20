@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    thread::sleep,
-    time::Duration,
-};
+use std::{collections::HashMap, thread::sleep, time::Duration};
 
 use bevy::{app::ScheduleRunnerPlugin, prelude::*};
 use bevy_quinnet::{
@@ -24,7 +20,10 @@ use protocol::{ClientMessage, ServerMessage};
 use crate::chat::{Chat, ChatInput, ChatNode};
 
 mod chat;
+mod player;
 mod protocol;
+
+use player::SpawnPlayerEvent;
 
 #[derive(Resource, Debug, Clone, Default)]
 struct Users {
@@ -48,6 +47,7 @@ fn build_app(app: &mut App) {
     app.add_plugins((
         ScheduleRunnerPlugin::default(),
         QuinnetClientPlugin::default(),
+        player::PlayerPlugin,
     ))
     .insert_resource(Users::default())
     .add_systems(
@@ -173,6 +173,17 @@ fn handle_server_messages(
             } => {
                 info!("{} joined", username);
                 users.names.insert(client_id, username.clone());
+
+                // Only spawn players for other clients (not ourselves)
+                // Our own player will be spawned in the InitClient handler
+                if client_id != users.self_id {
+                    godot_print!("Sending spawn event for remote client ID: {:?}", client_id);
+                    commands.send_event(SpawnPlayerEvent {
+                        client_id,
+                        position: None, // Use default position in scene
+                    });
+                }
+
                 commands.queue(move |world: &mut World| {
                     let mut chat_node = world.query::<&mut Chat>();
                     for mut chat_node in chat_node.iter_mut(world) {
@@ -189,6 +200,7 @@ fn handle_server_messages(
                 if let Some(username) = users.names.remove(&client_id) {
                     godot::prelude::godot_print!("{} left", username.clone());
                     commands.queue(move |world: &mut World| {
+                        // Update chat
                         let mut chat_node = world.query::<&mut Chat>();
                         for mut chat_node in chat_node.iter_mut(world) {
                             chat_node.messages.push(format!("{} left", username));
@@ -198,6 +210,37 @@ fn handle_server_messages(
                             username: username.clone(),
                             message: format!("{} left", username),
                         });
+
+                        // Find and destroy the player entity for this client
+                        let mut to_destroy = Vec::new();
+
+                        // First, find all player node handles associated with this client ID
+                        let mut query =
+                            world.query::<(&player::Player, &mut GodotNodeHandle, Entity)>();
+                        for (player, mut handle, entity) in query.iter_mut(world) {
+                            if player.0 == client_id {
+                                godot_print!(
+                                    "Destroying player entity for disconnected client: {}",
+                                    client_id
+                                );
+
+                                // Free the Godot node
+                                if let Some(mut player_node) =
+                                    handle.try_get::<player::PlayerNode>()
+                                {
+                                    player_node.queue_free();
+                                    godot_print!("Queued Godot player node for freeing");
+                                }
+
+                                // Mark this entity for destruction
+                                to_destroy.push(entity);
+                            }
+                        }
+
+                        // Now destroy all marked entities
+                        for entity in to_destroy {
+                            world.despawn(entity);
+                        }
                     });
                 } else {
                     warn!("ClientDisconnected for an unknown client_id: {}", client_id);
@@ -227,8 +270,73 @@ fn handle_server_messages(
                 client_id,
                 usernames,
             } => {
+                godot_print!("Setting self_id to: {:?}", client_id);
                 users.self_id = client_id;
                 users.names = usernames;
+
+                // Spawn player for self after we've received our own client_id
+                godot_print!(
+                    "Sending spawn event for local player with client ID: {:?}",
+                    client_id
+                );
+                commands.send_event(SpawnPlayerEvent {
+                    client_id,
+                    position: None, // Use default position in scene
+                });
+
+                // Spawn all other existing players
+                for &other_client_id in users.names.keys() {
+                    // Don't spawn our own player twice
+                    if other_client_id != client_id {
+                        godot_print!(
+                            "Spawning existing player with client ID: {:?}",
+                            other_client_id
+                        );
+                        commands.send_event(SpawnPlayerEvent {
+                            client_id: other_client_id,
+                            position: None, // Use default position in scene
+                        });
+                    }
+                }
+            }
+            ServerMessage::PlayerUpdate {
+                client_id,
+                x,
+                y,
+                horizontal,
+                vertical,
+            } => {
+                let player_id = users.self_id.clone();
+                commands.queue(move |world: &mut World| {
+                    // query the player node by client_id
+                    let mut player_query = world.query::<&mut GodotNodeHandle>();
+                    for mut handle in player_query.iter_mut(world) {
+                        let player_node = handle.try_get::<player::PlayerNode>();
+                        if player_node.is_none() {
+                            continue;
+                        }
+                        let mut player_node = player_node.unwrap();
+
+                        // Only update remote players - never override local player position
+                        if player_node.bind().client_id == client_id as u32
+                            && client_id != player_id
+                        {
+                            // First, check if position is significantly different (to prevent small jitters)
+                            let current_pos = player_node.get_position();
+                            let distance =
+                                ((current_pos.x - x).powi(2) + (current_pos.y - y).powi(2)).sqrt();
+                            // Only update if there's a significant change (more than 2 pixels)
+                            if distance > 2.0 {
+                                player_node.set_position(Vector2::new(x, y));
+                            }
+                        }
+                    }
+                    world.send_event(player::PlayerInputEvent {
+                        client_id,
+                        horizontal,
+                        vertical,
+                    });
+                });
             }
         }
     }

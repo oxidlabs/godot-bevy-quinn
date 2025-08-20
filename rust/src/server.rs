@@ -8,9 +8,10 @@ use bevy::{
 };
 use bevy_quinnet::{
     server::{
-        certificate::CertificateRetrievalMode, ConnectionLostEvent, Endpoint, QuinnetServer, QuinnetServerPlugin, ServerEndpointConfiguration
+        ConnectionLostEvent, Endpoint, QuinnetServer, QuinnetServerPlugin,
+        ServerEndpointConfiguration, certificate::CertificateRetrievalMode,
     },
-    shared::{channels::ChannelsConfiguration, ClientId},
+    shared::{ClientId, channels::ChannelsConfiguration},
 };
 
 use protocol::{ClientMessage, ServerMessage};
@@ -62,6 +63,7 @@ fn handle_client_messages(mut server: ResMut<QuinnetServer>, mut users: ResMut<U
                     } else {
                         info!("{} connected", name);
                         users.names.insert(client_id, name.clone());
+
                         // Initialize this client with existing state
                         endpoint
                             .send_message(
@@ -100,6 +102,29 @@ fn handle_client_messages(mut server: ResMut<QuinnetServer>, mut users: ResMut<U
                         ServerMessage::ChatMessage {
                             client_id: client_id,
                             message: message,
+                        },
+                    );
+                }
+                ClientMessage::PlayerUpdate {
+                    x,
+                    y,
+                    horizontal,
+                    vertical,
+                } => {
+                    info!(
+                        "Player update | {:?}: ({}, {})",
+                        users.names.get(&client_id),
+                        x,
+                        y
+                    );
+                    endpoint.try_send_group_message(
+                        users.names.keys(),
+                        ServerMessage::PlayerUpdate {
+                            client_id,
+                            x,
+                            y,
+                            horizontal,
+                            vertical,
                         },
                     );
                 }
