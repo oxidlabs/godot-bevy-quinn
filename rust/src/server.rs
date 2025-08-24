@@ -16,18 +16,22 @@ use bevy_quinnet::{
 
 use protocol::{ClientMessage, ServerMessage};
 
-mod protocol;
+use crate::protocol;
 
 #[derive(Resource, Debug, Clone, Default)]
 pub struct Users {
     names: HashMap<ClientId, String>,
 }
-
+/* 
 fn main() {
+    create_server();
+} */
+
+pub fn create_server() {
     App::new()
         .add_plugins((
             ScheduleRunnerPlugin::default(),
-            LogPlugin::default(),
+            //LogPlugin::default(),
             QuinnetServerPlugin::default(),
         ))
         .insert_resource(Users::default())
@@ -39,9 +43,9 @@ fn main() {
 fn start_listening(mut server: ResMut<QuinnetServer>) {
     server
         .start_endpoint(
-            ServerEndpointConfiguration::from_string("[::]:6000").unwrap(),
+            ServerEndpointConfiguration::from_string("0.0.0.0:6000").unwrap(),
             CertificateRetrievalMode::GenerateSelfSigned {
-                server_hostname: "::1".to_string(),
+                server_hostname: "0.0.0.0".to_string(),
             },
             ChannelsConfiguration::default(),
         )

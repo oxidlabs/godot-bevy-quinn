@@ -212,3 +212,17 @@ visible = false
 offset_top = 176.0
 offset_right = 320.0
 offset_bottom = 216.0
+
+[node name="HostButtonNode" type="HostButtonNode" parent="."]
+offset_left = 512.0
+offset_top = 320.0
+offset_right = 592.0
+offset_bottom = 360.0
+text = "Host"
+
+[node name="JoinButtonNode" type="JoinButtonNode" parent="."]
+offset_left = 512.0
+offset_top = 376.0
+offset_right = 592.0
+offset_bottom = 416.0
+text = "Join"

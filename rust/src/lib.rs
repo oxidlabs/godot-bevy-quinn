@@ -15,13 +15,15 @@ use godot_bevy::prelude::*;
 use rand::{Rng, distributions::Alphanumeric};
 use tokio::sync::mpsc;
 
-use protocol::{ClientMessage, ServerMessage};
+use crate::protocol::{ClientMessage, ServerMessage};
 
 use crate::chat::{Chat, ChatInput, ChatNode};
 
 mod chat;
 mod player;
 mod protocol;
+mod ui;
+mod server;
 
 use player::SpawnPlayerEvent;
 
@@ -52,7 +54,7 @@ fn build_app(app: &mut App) {
     .insert_resource(Users::default())
     .add_systems(
         Startup,
-        (hello_world, start_chat_listener, start_connection),
+        (hello_world, start_chat_listener, ui::start_ui_listener),
     )
     .add_systems(
         Update,
@@ -61,6 +63,7 @@ fn build_app(app: &mut App) {
             (handle_terminal_messages, handle_server_messages).run_if(client_connected),
             chat::read_chat_messages,
             handle_chat_sync,
+            ui::handle_ui_commands,
         ),
     )
     .add_systems(PostUpdate, on_app_exit);
@@ -130,6 +133,7 @@ fn handle_client_events(
     mut connection_events: EventReader<ConnectionEvent>,
     mut connection_failed_events: EventReader<ConnectionFailedEvent>,
     mut client: ResMut<QuinnetClient>,
+    mut commands: Commands,
 ) {
     if !connection_events.is_empty() {
         // We are connected
@@ -146,6 +150,29 @@ fn handle_client_events(
             .connection_mut()
             .send_message(ClientMessage::Join { name: username })
             .unwrap();
+
+        // Remove the UI now that we are connected
+        commands.queue(|world: &mut World| {
+            let mut to_destroy: Vec<Entity> = Vec::new();
+            let mut query = world.query::<(&mut GodotNodeHandle, Entity)>();
+            for (mut handle, entity) in query.iter_mut(world) {
+                let mut removed_any = false;
+                if let Some(mut node) = handle.try_get::<ui::HostButtonNode>() {
+                    node.queue_free();
+                    removed_any = true;
+                }
+                if let Some(mut node) = handle.try_get::<ui::JoinButtonNode>() {
+                    node.queue_free();
+                    removed_any = true;
+                }
+                if removed_any {
+                    to_destroy.push(entity);
+                }
+            }
+            for e in to_destroy {
+                world.despawn(e);
+            }
+        });
 
         connection_events.clear();
     }
